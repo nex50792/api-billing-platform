@@ -1,0 +1,33 @@
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# ログ
+*.log
+
+# バイナリ
+/bin/
+backend/server
+backend/bin/
+
+# 環境変数
+.env
+.env.local
+.env.*.local
+
+# 古いバックアップ
+*.cpy*
+
+# Node
+node_modules/
+
+# ビルド出力
+dist/
+build/

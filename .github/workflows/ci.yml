@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-lint:
+    name: Backend · golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: backend/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: backend
+
+      - name: Verify generated types are in sync with openapi.yaml
+        working-directory: backend
+        run: |
+          go generate ./internal/apispec/...
+          git diff --exit-code internal/apispec/types.gen.go || {
+            echo "::error::types.gen.go is out of sync. Run 'cd backend/internal/apispec && go generate ./...' and commit."
+            exit 1
+          }
+
+  backend-test:
+    name: Backend · tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: api_billing_test
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: backend/go.sum
+
+      - name: Apply test schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -p 5435 -U postgres -d api_billing_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          psql -h localhost -p 5435 -U postgres -d api_billing_test -f backend/migrations/000001_init.up.sql
+          psql -h localhost -p 5435 -U postgres -d api_billing_test -f backend/migrations/test_seed.sql
+
+      - name: go test
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5435"
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: api_billing_test
+        run: go test -p 1 -race ./internal/...
+
+  openapi-contract:
+    name: OpenAPI · contract test (schemathesis)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: api_billing
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: backend/go.sum
+
+      - name: Apply schema
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -p 5434 -U postgres -d api_billing -f backend/migrations/000001_init.up.sql
+
+      - name: Build & start backend
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5434"
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: api_billing
+          SERVER_PORT: "8080"
+          APP_ENV: test
+        run: |
+          go build -o ./bin/server ./cmd/server/main.go
+          ./bin/server &
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health; then
+              echo "Server up"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: schemathesis
+        run: |
+          pipx install schemathesis
+          schemathesis run docs/openapi.yaml \
+            --url http://localhost:8080 \
+            --checks response_schema_conformance \
+            --phases fuzzing \
+            --max-examples 10
+
+  frontend:
+    name: Frontend · lint + typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm run build

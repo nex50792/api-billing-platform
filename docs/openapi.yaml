@@ -1,0 +1,1486 @@
+openapi: 3.0.3
+info:
+  title: API Billing Platform
+  version: 1.0.0
+  description: |
+    Go + PostgreSQL による SaaS 型 API 課金プラットフォームの REST API 仕様。
+
+    3 種類のユーザーロールを扱う B2B2B モデル:
+    - Provider: API を提供する側
+    - Customer: API を利用する側
+    - Admin: プラットフォーム運営者
+
+    認証は 3 ロール独立のセッション Cookie（HttpOnly, SameSite=Lax, 24 時間有効）。
+    API キー認証は `Authorization: Bearer <api_key>` ヘッダー。
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発環境
+
+tags:
+  - name: Customer
+    description: API 利用者向け認証・アカウント管理
+  - name: Provider
+    description: API 提供者向け認証・アカウント管理（Admin による招待方式）
+  - name: Admin
+    description: プラットフォーム運営者向け認証・管理機能
+  - name: API Key
+    description: API キーの発行・削除・検証
+  - name: Provided API
+    description: Provider が提供する API サービスの管理
+  - name: Stripe
+    description: サブスクリプション決済・Billing Portal・Webhook
+  - name: Billing
+    description: API キー認証による利用チェック
+  - name: Health
+    description: ヘルスチェック
+
+components:
+  securitySchemes:
+    customerSession:
+      type: apiKey
+      in: cookie
+      name: customer_session_token
+      description: Customer ログインで発行される HttpOnly セッション Cookie
+    providerSession:
+      type: apiKey
+      in: cookie
+      name: provider_session_token
+      description: Provider ログインで発行される HttpOnly セッション Cookie
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: admin_session_token
+      description: Admin ログインで発行される HttpOnly セッション Cookie
+    apiKeyBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: api_key
+      description: "`Authorization: Bearer <api_key>` 形式で送信する Customer 発行の API キー"
+
+  schemas:
+    ErrorText:
+      type: string
+      description: プレーンテキストのエラーメッセージ
+      example: "unauthorized"
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    APIKeyLimitError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: api_key_limit_exceeded
+        message:
+          type: string
+          example: プランの API キー発行上限に達しました。Proプランへのアップグレードをご検討ください。
+      required: [error, message]
+
+    RateLimitError:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: rate_limit_exceeded
+        message:
+          type: string
+          example: 月間リクエスト上限に達しました。Proプランへのアップグレードをご検討ください。
+      required: [valid, error, message]
+
+    CredentialsRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    PasswordChangeRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+      required: [current_password, new_password]
+
+    SignupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+      required: [name, email, password]
+
+    VerifyCodeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          pattern: '^\d{6}$'
+      required: [email, code]
+
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required: [email]
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+      required: [token, password]
+
+    TokenOnlyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [token]
+
+    SetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+      required: [token, password]
+
+    CustomerMe:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        plan:
+          type: string
+          enum: [free, pro]
+        subscription_status:
+          type: string
+          nullable: true
+      required: [id, name, email, plan]
+
+    ProviderMe:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+      required: [id, name, email]
+
+    AdminMe:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+      required: [id, email]
+
+    AdminCustomer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        plan:
+          type: string
+        subscription_status:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required: [id, name, email, plan, subscription_status, is_active, created_at]
+
+    Provider:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        is_active:
+          type: boolean
+      required: [id, name, email, is_active]
+
+    CreateProviderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+      required: [name, email]
+
+    ProvidedAPIRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        documentation:
+          type: string
+          nullable: true
+      required: [name, description]
+
+    ProvidedAPIPublic:
+      description: Customer 向け公開レスポンス（provider_id を含まない）
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        documentation:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, name, description, created_at]
+
+    ProvidedAPI:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        documentation:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        key_count:
+          type: integer
+          description: この API に紐づく Customer 発行 API キー数（Provider 視点のみ）
+        total_usage:
+          type: integer
+          description: この API の累計利用回数（Provider 視点のみ）
+      required: [id, name, description, created_at]
+
+    IssueAPIKeyRequest:
+      type: object
+      properties:
+        provided_api_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    IssueAPIKeyResponse:
+      type: object
+      properties:
+        api_key:
+          type: string
+          description: プレーンな API キー（発行時のみ返却、DB にはハッシュのみ保存）
+          example: ak_3f9c2a1b8d7e6f5a4c3b2a1d0e9f8c7b
+        id:
+          type: string
+          format: uuid
+      required: [api_key, id]
+
+    APIKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        provided_api_id:
+          type: string
+          format: uuid
+          nullable: true
+        usage_count:
+          type: integer
+        usage_reset_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required: [id, customer_id, usage_count, usage_reset_at, created_at]
+
+    VerifyAPIKeyRequest:
+      type: object
+      properties:
+        api_key:
+          type: string
+        provided_api_id:
+          type: string
+          format: uuid
+      required: [api_key, provided_api_id]
+
+    VerifyAPIKeyResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
+        customer_id:
+          type: string
+          format: uuid
+        usage_count:
+          type: integer
+      required: [valid, customer_id, usage_count]
+
+    VerifyAPIKeyInvalidResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: false
+      required: [valid]
+
+    BillingCheckResponse:
+      type: object
+      properties:
+        customer:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            plan:
+              type: string
+            subscription_status:
+              type: string
+              nullable: true
+          required: [id, plan]
+        api_key:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            usage_count:
+              type: integer
+            usage_reset_at:
+              type: string
+              format: date-time
+          required: [id, usage_count, usage_reset_at]
+        provided_api:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+          required: [id, name]
+      required: [customer, api_key]
+
+    EmailLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        to_email:
+          type: string
+        subject:
+          type: string
+        status:
+          type: string
+          enum: [success, error]
+        error_message:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+      required: [id, to_email, subject, status, sent_at]
+
+    UsageRow:
+      type: object
+      properties:
+        api_id:
+          type: string
+          format: uuid
+        api_name:
+          type: string
+        customer_id:
+          type: string
+          format: uuid
+        customer_name:
+          type: string
+        customer_email:
+          type: string
+        usage_count:
+          type: integer
+      required: [api_id, api_name, customer_id, customer_name, customer_email, usage_count]
+
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        checkout_url:
+          type: string
+          format: uri
+        session_id:
+          type: string
+      required: [checkout_url, session_id]
+
+    BillingPortalResponse:
+      type: object
+      properties:
+        portal_url:
+          type: string
+          format: uri
+      required: [portal_url]
+
+    SubscriptionResponse:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, pro]
+        subscription_status:
+          type: string
+          nullable: true
+        stripe_customer_id:
+          type: string
+          nullable: true
+      required: [plan]
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: 認証が必要、またはセッションが無効
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ErrorText'
+    BadRequest:
+      description: リクエストが不正
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ErrorText'
+    NotFound:
+      description: リソースが見つからない
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ErrorText'
+    InternalError:
+      description: 内部エラー
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ErrorText'
+    TooManyRequests:
+      description: レート制限超過
+      content:
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ErrorText'
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      tags: [Health]
+      summary: ヘルスチェック
+      description: DB への ping を行い、OK なら 200、NG なら 500 を返す
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+        '500':
+          description: DB NG
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: db NG
+
+  /customer/register:
+    post:
+      operationId: customerRegister
+      tags: [Customer]
+      summary: Customer サインアップ
+      description: |
+        新規 Customer を登録し、メール認証コードを送信する。
+        既存未アクティブのメールアドレスは code の再発行が行われる。
+        レート制限: IP あたり 15 分 5 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: 登録完了、認証コード送信済
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: signup ok
+                  verification:
+                    type: string
+                    example: sent
+                required: [message, verification]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: メールアドレスは既に有効な Customer として登録済み
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ErrorText'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/verify:
+    post:
+      operationId: customerVerifyCode
+      tags: [Customer]
+      summary: メール認証コード検証
+      description: 'レート制限: IP あたり 15 分 5 回。'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequest'
+      responses:
+        '200':
+          description: 認証成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/login:
+    post:
+      operationId: customerLogin
+      tags: [Customer]
+      summary: Customer ログイン
+      description: |
+        成功時は `customer_session_token` Cookie（HttpOnly, 24 時間）を発行。
+        レート制限: IP あたり 15 分 10 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '200':
+          description: ログイン成功（Cookie が発行される）
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: customer_session_token=...; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/logout:
+    post:
+      operationId: customerLogout
+      tags: [Customer]
+      summary: Customer ログアウト
+      description: セッションを DB から削除し、Cookie を無効化する
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: ログアウト完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /customer/me:
+    get:
+      operationId: customerMe
+      tags: [Customer]
+      summary: 現在ログイン中の Customer 情報
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: Customer 情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMe'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/forgot-password:
+    post:
+      operationId: customerForgotPassword
+      tags: [Customer]
+      summary: パスワードリセットメール送信
+      description: |
+        登録済みメールアドレスにリセットリンクを送信。
+        メールアドレスが存在しない場合でも 200 を返す（ユーザー列挙攻撃の防止）。
+        レート制限: IP あたり 15 分 3 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: 送信要求を受理（メール存在有無は返さない）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/reset-password:
+    post:
+      operationId: customerResetPassword
+      tags: [Customer]
+      summary: パスワードリセット実行
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: リセット完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/change-password:
+    post:
+      operationId: customerChangePassword
+      tags: [Customer]
+      summary: Customer パスワード変更
+      description: 変更後、現在のセッション以外を全て無効化する
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: 変更完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /apikeys:
+    post:
+      operationId: issueAPIKey
+      tags: [API Key]
+      summary: API キー発行
+      description: |
+        Customer が新しい API キーを発行する。プランにより発行可能数に上限あり（Free 3, Pro 20）。
+        発行時のみプレーンなキーを返却し、DB には SHA-256 ハッシュのみ保存する。
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueAPIKeyRequest'
+      responses:
+        '200':
+          description: 発行成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueAPIKeyResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: プラン上限超過
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyLimitError'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /apikeys/{id}:
+    delete:
+      operationId: deleteAPIKey
+      tags: [API Key]
+      summary: API キー削除
+      description: 自分が発行したキーのみ削除可能（他 Customer のキー ID を指定すると 404）
+      security:
+        - customerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: 削除完了
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/apikeys:
+    get:
+      operationId: listCustomerAPIKeys
+      tags: [API Key]
+      summary: 自分の API キー一覧
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: API キー一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIKey'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [Stripe]
+      summary: Stripe Checkout セッション生成
+      description: Customer を Pro プランへアップグレードするための Stripe Checkout URL を返す
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 既に Pro プラン
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ErrorText'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/billing-portal:
+    post:
+      operationId: createBillingPortalSession
+      tags: [Stripe]
+      summary: Stripe Billing Portal セッション生成
+      description: サブスクリプション管理（プラン変更・キャンセル等）の Stripe Portal URL を返す
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: Billing Portal URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingPortalResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /customer/subscription:
+    get:
+      operationId: getSubscription
+      tags: [Stripe]
+      summary: Customer のサブスクリプション状態
+      security:
+        - customerSession: []
+      responses:
+        '200':
+          description: プラン・Stripe 情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/login:
+    post:
+      operationId: providerLogin
+      tags: [Provider]
+      summary: Provider ログイン
+      description: |
+        成功時は `provider_session_token` Cookie（HttpOnly, 24 時間）を発行。
+        レート制限: IP あたり 15 分 10 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '200':
+          description: ログイン成功（Cookie が発行される）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/logout:
+    post:
+      operationId: providerLogout
+      tags: [Provider]
+      summary: Provider ログアウト
+      security:
+        - providerSession: []
+      responses:
+        '200':
+          description: ログアウト完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /provider/me:
+    get:
+      operationId: providerMe
+      tags: [Provider]
+      summary: 現在ログイン中の Provider 情報
+      security:
+        - providerSession: []
+      responses:
+        '200':
+          description: Provider 情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderMe'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /provider/forgot-password:
+    post:
+      operationId: providerForgotPassword
+      tags: [Provider]
+      summary: Provider 用パスワードリセットメール送信
+      description: |
+        メールアドレスが存在しない場合でも 200 を返す（ユーザー列挙攻撃の防止）。
+        レート制限: IP あたり 15 分 3 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: 送信要求を受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/validate-token:
+    post:
+      operationId: providerValidateToken
+      tags: [Provider]
+      summary: パスワード設定トークンの有効性検証
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenOnlyRequest'
+      responses:
+        '200':
+          description: 有効なトークン
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                required: [ok]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/set-password:
+    post:
+      operationId: providerSetPassword
+      tags: [Provider]
+      summary: 初回パスワード設定（招待トークン経由）
+      description: Admin による招待後、メールで受け取ったトークンと共にパスワードを設定してアカウント有効化
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordRequest'
+      responses:
+        '200':
+          description: パスワード設定完了、アカウント有効化
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/change-password:
+    post:
+      operationId: providerChangePassword
+      tags: [Provider]
+      summary: Provider パスワード変更
+      description: 変更後、現在のセッション以外を全て無効化する
+      security:
+        - providerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: 変更完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/apis:
+    get:
+      operationId: listOwnProvidedAPIs
+      tags: [Provided API]
+      summary: 自分が提供する API 一覧（key_count・total_usage 付き）
+      security:
+        - providerSession: []
+      responses:
+        '200':
+          description: Provider 自身の API 一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProvidedAPI'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/usage:
+    get:
+      operationId: listProviderUsage
+      tags: [Provided API]
+      summary: API ごと・Customer ごとの利用状況
+      security:
+        - providerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: 利用状況一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UsageRow'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provided-apis:
+    get:
+      operationId: listPublicProvidedAPIs
+      tags: [Provided API]
+      summary: 公開 API 一覧（認証不要、provider_id を含まない）
+      security: []
+      responses:
+        '200':
+          description: 全 Provider の公開 API
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProvidedAPIPublic'
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: createProvidedAPI
+      tags: [Provided API]
+      summary: 提供 API の登録
+      security:
+        - providerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvidedAPIRequest'
+      responses:
+        '201':
+          description: 登録完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvidedAPI'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provided-apis/{id}:
+    put:
+      operationId: updateProvidedAPI
+      tags: [Provided API]
+      summary: 提供 API の更新（自分の API のみ）
+      security:
+        - providerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvidedAPIRequest'
+      responses:
+        '200':
+          description: 更新完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvidedAPI'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteProvidedAPI
+      tags: [Provided API]
+      summary: 提供 API の削除（自分の API のみ）
+      security:
+        - providerSession: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: 削除完了
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /provider/keys/verify:
+    post:
+      operationId: verifyAPIKey
+      tags: [API Key]
+      summary: Customer の API キーを Provider が検証
+      description: |
+        Customer が Provider のサービスにリクエストした際、Provider が受け取った API キーの有効性を検証する。
+        自分（認証済み Provider）が所有する provided_api_id に紐づくキーのみ検証可能。
+        有効な場合 usage_count が自動的に +1 される。
+      security:
+        - providerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyAPIKeyRequest'
+      responses:
+        '200':
+          description: 有効なキー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyAPIKeyResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: 無効なキーまたは認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyAPIKeyInvalidResponse'
+        '429':
+          description: プランの月間利用上限超過
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [Admin]
+      summary: Admin ログイン
+      description: |
+        成功時は `admin_session_token` Cookie（HttpOnly, 24 時間）を発行。
+        レート制限: IP あたり 15 分 10 回。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      tags: [Admin]
+      summary: Admin ログアウト
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: ログアウト完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /admin/me:
+    get:
+      operationId: adminMe
+      tags: [Admin]
+      summary: 現在ログイン中の Admin 情報
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: Admin 情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMe'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /admin/change-password:
+    post:
+      operationId: adminChangePassword
+      tags: [Admin]
+      summary: Admin パスワード変更
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '200':
+          description: 変更完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/customers:
+    get:
+      operationId: listCustomersForAdmin
+      tags: [Admin]
+      summary: Customer 一覧
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Customer 一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminCustomer'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/email-logs:
+    get:
+      operationId: listEmailLogs
+      tags: [Admin]
+      summary: メール送信ログ（最新 200 件）
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: メール送信ログ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailLog'
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /providers:
+    get:
+      operationId: listProviders
+      tags: [Admin]
+      summary: Provider 一覧
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Provider 一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Provider'
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: createProvider
+      tags: [Admin]
+      summary: Provider 招待（新規作成またはトークン再発行）
+      description: |
+        新規メールなら Provider を作成してパスワード設定リンクを送信。
+        既存メールならパスワード設定トークンを再発行してメール再送。
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProviderRequest'
+      responses:
+        '201':
+          description: 新規作成完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+        '200':
+          description: 既存 Provider のトークン再発行完了
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /providers/{id}:
+    delete:
+      operationId: deleteProvider
+      tags: [Admin]
+      summary: Provider 削除
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: 削除完了
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /billing/check:
+    post:
+      operationId: checkBilling
+      tags: [Billing]
+      summary: API キー検証・利用状況取得
+      description: |
+        Customer 発行の API キーを `Authorization: Bearer` ヘッダーで送信し、
+        Customer 情報・利用状況・紐づく Provided API を返す。
+      security:
+        - apiKeyBearer: []
+      responses:
+        '200':
+          description: 検証成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCheckResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /stripe/webhook:
+    post:
+      operationId: handleStripeWebhook
+      tags: [Stripe]
+      summary: Stripe Webhook 受信
+      description: |
+        Stripe からのイベントを受信し、サブスクリプション状態を更新する。
+        署名検証（`Stripe-Signature` ヘッダー）と冪等性チェック（`stripe_events` テーブル）を行う。
+
+        処理対象イベント:
+        - `checkout.session.completed`: プランを Pro にアップグレード
+        - `customer.subscription.created` / `customer.subscription.updated`: `subscription_status` を更新
+        - `customer.subscription.deleted`: プランを Free にダウングレード
+        - `invoice.payment_failed`: `subscription_status` を `past_due` に更新
+      security: []
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe Event payload（raw body）
+      responses:
+        '200':
+          description: 処理完了または重複イベント（冪等）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }

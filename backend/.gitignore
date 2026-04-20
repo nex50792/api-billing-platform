@@ -1,0 +1,34 @@
+# バイナリ
+/bin/
+/server
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.dylib
+
+# Go
+vendor/
+
+# 環境変数
+.env
+.env.local
+.env.*.local
+
+# テスト
+*.test
+coverage.out
+*.prof
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ビルド出力
+dist/
+build/

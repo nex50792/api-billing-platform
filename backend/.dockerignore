@@ -1,0 +1,37 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+vendor/
+# go.sum は Dockerfile で必要なため除外しない
+
+# Build outputs
+bin/
+dist/
+build/
+
+# Tests
+*.test
+coverage.out
+*.prof
+
+# Documentation
+README.md
+LICENSE

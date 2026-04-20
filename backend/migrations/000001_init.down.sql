@@ -1,0 +1,13 @@
+-- 全テーブルを削除（依存順序を考慮）
+DROP TABLE IF EXISTS stripe_events CASCADE;
+DROP TABLE IF EXISTS email_logs CASCADE;
+DROP TABLE IF EXISTS customer_password_resets CASCADE;
+DROP TABLE IF EXISTS customer_verification_codes CASCADE;
+DROP TABLE IF EXISTS admin_sessions CASCADE;
+DROP TABLE IF EXISTS customer_sessions CASCADE;
+DROP TABLE IF EXISTS provider_sessions CASCADE;
+DROP TABLE IF EXISTS admins CASCADE;
+DROP TABLE IF EXISTS api_keys CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS provided_apis CASCADE;
+DROP TABLE IF EXISTS providers CASCADE;

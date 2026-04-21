@@ -1,5 +1,5 @@
-import { Form, redirect, useActionData, useLoaderData, useNavigation } from 'react-router';
-import type { Route } from './+types/edit';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -12,60 +12,94 @@ interface ProvidedAPIDetail {
   documentation?: string;
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const id = params.id ?? '';
-  if (!id) {
-    throw new Response('Not Found', { status: 404 });
-  }
-  const res = await fetch(`${API_BASE}/provider/apis`, {
-    headers: { Cookie: request.headers.get('Cookie') ?? '' },
-  });
-  if (!res.ok) {
-    throw new Response('Failed to load', { status: 500 });
-  }
-  const list = (await res.json()) as ProvidedAPIDetail[];
-  const api = list.find(a => a.id === id);
-  if (!api) {
-    throw new Response('Not Found', { status: 404 });
-  }
-  return { api };
-}
-
-export async function action({ params, request }: Route.ActionArgs) {
-  const id = params.id ?? '';
-  const formData = await request.formData();
-  const name = String(formData.get('name') ?? '');
-  const description = String(formData.get('description') ?? '');
-  const documentationRaw = String(formData.get('documentation') ?? '');
-  const documentation = documentationRaw || undefined;
-  const res = await fetch(`${API_BASE}/provided-apis/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: request.headers.get('Cookie') ?? '',
-    },
-    body: JSON.stringify({ name, description, documentation }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { error: text || '更新に失敗しました' };
-  }
-  return redirect('/provider/apis');
-}
-
 export default function ProviderAPIEdit() {
-  const { api } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const submitting = navigation.state === 'submitting';
-
-  const error = actionData && 'error' in actionData ? actionData.error : null;
+  const navigate = useNavigate();
+  const params = useParams();
+  const id = params.id ?? '';
+  const [api, setApi] = useState<ProvidedAPIDetail | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const errorId = 'provider-api-edit-error';
+
+  useEffect(() => {
+    if (!id) {
+      setLoadError('Not Found');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/provider/apis`, { credentials: 'include' });
+        if (!res.ok) {
+          if (!cancelled) setLoadError('Failed to load');
+          return;
+        }
+        const list = (await res.json()) as ProvidedAPIDetail[];
+        const found = list.find(a => a.id === id);
+        if (!found) {
+          if (!cancelled) setLoadError('Not Found');
+          return;
+        }
+        if (!cancelled) setApi(found);
+      } catch {
+        if (!cancelled) setLoadError('通信エラー');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const name = String(formData.get('name') ?? '');
+      const description = String(formData.get('description') ?? '');
+      const documentationRaw = String(formData.get('documentation') ?? '');
+      const documentation = documentationRaw || undefined;
+      const res = await fetch(`${API_BASE}/provided-apis/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, description, documentation }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || '更新に失敗しました');
+        return;
+      }
+      navigate('/provider/apis');
+    } catch {
+      setError('通信エラー');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loadError) {
+    return (
+      <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
+        <p role="alert" className="text-red-600">{loadError}</p>
+      </main>
+    );
+  }
+
+  if (!api) {
+    return (
+      <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
+        <p>読み込み中...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
       <h2>APIサービス編集</h2>
-      <Form method="post">
+      <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="provider-api-edit-name">API名</label>
           <input
@@ -113,7 +147,7 @@ export default function ProviderAPIEdit() {
         >
           {submitting ? '更新中...' : '更新'}
         </button>
-      </Form>
+      </form>
       {error && <p id={errorId} role="alert" className="text-red-600 mt-4">{error}</p>}
     </main>
   );

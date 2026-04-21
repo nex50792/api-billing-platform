@@ -1,59 +1,66 @@
-import { useEffect } from 'react';
-import { Form, useActionData, useNavigate, useNavigation } from 'react-router';
-import type { Route } from './+types/change-password';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 const darkPwInputClass = 'w-full p-2 text-[15px] border border-slate-600 rounded bg-slate-900 text-white box-border';
 const labelClass = 'block mb-1.5 text-sm text-slate-300';
 
-export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const currentPassword = String(formData.get('currentPassword') ?? '');
-  const newPassword = String(formData.get('newPassword') ?? '');
-  const confirmPassword = String(formData.get('confirmPassword') ?? '');
-  if (newPassword !== confirmPassword) {
-    return { error: '新しいパスワードが一致しません' };
-  }
-  if (newPassword.length < 8) {
-    return { error: 'パスワードは8文字以上で設定してください' };
-  }
-  const res = await fetch(`${API_BASE}/customer/change-password`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: request.headers.get('Cookie') ?? '',
-    },
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { error: text || 'パスワードの変更に失敗しました' };
-  }
-  return { ok: true as const };
-}
-
 export default function ChangePassword() {
   const navigate = useNavigate();
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const submitting = navigation.state === 'submitting';
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const errorId = 'change-password-error';
 
   useEffect(() => {
-    if (actionData && 'ok' in actionData && actionData.ok) {
+    if (success) {
       const t = setTimeout(() => navigate('/'), 2000);
       return () => clearTimeout(t);
     }
-  }, [actionData, navigate]);
+  }, [success, navigate]);
 
-  const error = actionData && 'error' in actionData ? actionData.error : null;
-  const success = actionData && 'ok' in actionData && actionData.ok ? 'パスワードを変更しました' : null;
-  const errorId = 'change-password-error';
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    const formData = new FormData(e.currentTarget);
+    const currentPassword = String(formData.get('currentPassword') ?? '');
+    const newPassword = String(formData.get('newPassword') ?? '');
+    const confirmPassword = String(formData.get('confirmPassword') ?? '');
+    if (newPassword !== confirmPassword) {
+      setError('新しいパスワードが一致しません');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('パスワードは8文字以上で設定してください');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/customer/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || 'パスワードの変更に失敗しました');
+        return;
+      }
+      setSuccess('パスワードを変更しました');
+    } catch {
+      setError('通信エラー');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <main className="max-w-sm mx-auto my-10 p-6 bg-slate-800 rounded-lg shadow-lg text-white">
       <h2 className="mb-6 font-bold">パスワード変更</h2>
-      <Form method="post">
+      <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="change-password-current" className={labelClass}>現在のパスワード</label>
           <input
@@ -104,7 +111,7 @@ export default function ChangePassword() {
         >
           {submitting ? '変更中...' : 'パスワードを変更する'}
         </button>
-      </Form>
+      </form>
       <div className="mt-4 text-center">
         <a href="/" className="text-slate-400 text-sm no-underline">ダッシュボードに戻る</a>
       </div>

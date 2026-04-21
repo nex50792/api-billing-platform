@@ -1,43 +1,49 @@
-import { Form, redirect, useActionData, useNavigation } from 'react-router';
-import type { Route } from './+types/new';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 const darkInputClass = 'w-full p-2 bg-neutral-700 text-white border border-gray-500 rounded';
 
-export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const name = String(formData.get('name') ?? '');
-  const description = String(formData.get('description') ?? '');
-  const documentationRaw = String(formData.get('documentation') ?? '');
-  const documentation = documentationRaw || undefined;
-  const res = await fetch(`${API_BASE}/provided-apis`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: request.headers.get('Cookie') ?? '',
-    },
-    body: JSON.stringify({ name, description, documentation }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { error: text || '登録に失敗しました' };
-  }
-  return redirect('/provider/apis');
-}
-
 export default function ProviderAPINew() {
-  const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const submitting = navigation.state === 'submitting';
-
-  const error = actionData && 'error' in actionData ? actionData.error : null;
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const errorId = 'provider-api-new-error';
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const name = String(formData.get('name') ?? '');
+      const description = String(formData.get('description') ?? '');
+      const documentationRaw = String(formData.get('documentation') ?? '');
+      const documentation = documentationRaw || undefined;
+      const res = await fetch(`${API_BASE}/provided-apis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, description, documentation }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        setError(text || '登録に失敗しました');
+        return;
+      }
+      navigate('/provider/apis');
+    } catch {
+      setError('通信エラー');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
       <h2>新規APIサービス登録</h2>
-      <Form method="post">
+      <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="provider-api-new-name">API名</label>
           <input
@@ -82,7 +88,7 @@ export default function ProviderAPINew() {
         >
           {submitting ? '登録中...' : '登録'}
         </button>
-      </Form>
+      </form>
       {error && <p id={errorId} role="alert" className="text-red-600 mt-4">{error}</p>}
     </main>
   );

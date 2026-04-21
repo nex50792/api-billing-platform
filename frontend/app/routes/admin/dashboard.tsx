@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { redirect, useNavigate } from 'react-router';
+import type { Route } from './+types/dashboard';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const cookie = request.headers.get('Cookie') ?? '';
+  const res = await fetch(`${API_BASE}/admin/me`, { headers: { Cookie: cookie } });
+  if (!res.ok) {
+    throw redirect('/admin/login');
+  }
+  return null;
+}
 
 interface Provider {
   id: string;
@@ -54,17 +64,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    fetch(`${API_BASE}/admin/me`, { credentials: 'include' })
-      .then(res => {
-        if (!res.ok) navigate('/admin/login');
-      })
-      .catch(() => navigate('/admin/login'));
-
     fetchProviders(mounted);
     fetchCustomers(mounted);
     fetchEmailLogs(mounted);
     return () => { mounted = false; };
-  }, [navigate]);
+  }, []);
 
   const fetchCustomers = (mounted = true) => {
     setCustomerLoading(true);

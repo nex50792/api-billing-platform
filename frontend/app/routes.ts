@@ -3,6 +3,7 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
   route("admin/login", "routes/admin/login.tsx"), // 管理者用ログイン
+  route("admin", "routes/admin/dashboard.tsx"),
   route("register", "routes/customer/register.tsx"), // 顧客登録をトップレベルに統一
   route("forgot-password", "routes/customer/forgot-password.tsx"),
   route("reset-password", "routes/customer/reset-password.tsx"),

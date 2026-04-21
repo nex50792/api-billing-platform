@@ -9,5 +9,8 @@
   },
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "VITE_API_URL": "https://api-billing-platform.onrender.com"
   }
 }

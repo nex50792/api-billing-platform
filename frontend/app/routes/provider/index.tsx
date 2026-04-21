@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { redirect, useLoaderData, useNavigate } from 'react-router';
-import type { Route } from './+types/index';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import type { ProvidedAPI } from '../../lib/api';
 import { apiClient } from '../../lib/api';
 
@@ -24,27 +23,36 @@ interface UsageRow {
 const thClass = 'border-b border-gray-500 text-left py-2 px-1';
 const thRightClass = 'border-b border-gray-500 text-right py-2 px-1';
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get('Cookie') ?? '';
-  const meRes = await fetch(`${API_BASE}/provider/me`, { headers: { Cookie: cookie } });
-  if (!meRes.ok) {
-    throw redirect('/provider/login');
-  }
-  const provider = (await meRes.json()) as ProviderInfo;
-  const apisRes = await fetch(`${API_BASE}/provider/apis`, { headers: { Cookie: cookie } });
-  const apis = apisRes.ok ? ((await apisRes.json()) as ProvidedAPI[]) : [];
-  return { provider, apis: apis ?? [] };
-}
-
 export default function ProviderDashboard() {
-  const { provider, apis: initialApis } = useLoaderData<typeof loader>();
-  const [apis, setApis] = useState<ProvidedAPI[]>(initialApis);
+  const [provider, setProvider] = useState<ProviderInfo | null>(null);
+  const [apis, setApis] = useState<ProvidedAPI[]>([]);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const [usageData, setUsageData] = useState<UsageRow[]>([]);
   const [showUsage, setShowUsage] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${API_BASE}/provider/me`, { credentials: 'include' })
+      .then(async res => {
+        if (!mounted) return;
+        if (!res.ok) {
+          navigate('/provider/login');
+          return;
+        }
+        setProvider((await res.json()) as ProviderInfo);
+        const apisRes = await fetch(`${API_BASE}/provider/apis`, { credentials: 'include' });
+        if (mounted && apisRes.ok) {
+          setApis((await apisRes.json()) as ProvidedAPI[]);
+        }
+      })
+      .catch(() => { if (mounted) navigate('/provider/login'); });
+    return () => { mounted = false; };
+  }, [navigate]);
+
+  if (!provider) return null;
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('本当に削除しますか？')) return;

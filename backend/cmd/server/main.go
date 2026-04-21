@@ -19,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/stripe/stripe-go/v85"
 
+	"api-billing-platform/internal/dbmigrate"
 	"api-billing-platform/internal/handler"
 	"api-billing-platform/internal/middleware"
 	"api-billing-platform/internal/repository"
@@ -90,6 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	if err := dbmigrate.Apply(db); err != nil {
+		slog.Error("migration failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("migrations applied")
 
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:5173", "http://localhost:5174"}
 	if v := os.Getenv("ALLOWED_ORIGINS"); v != "" {

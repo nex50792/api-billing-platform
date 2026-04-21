@@ -12,6 +12,11 @@ import (
 )
 
 func setSessionCookie(w http.ResponseWriter, name, value string, expires time.Time) {
+	// 本番 (HTTPS + クロスサイト) では SameSite=None が必須。ローカル開発 (same-origin) は Lax で十分。
+	sameSite := http.SameSiteLaxMode
+	if isSecureCookie() {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -19,7 +24,7 @@ func setSessionCookie(w http.ResponseWriter, name, value string, expires time.Ti
 		HttpOnly: true,
 		Secure:   isSecureCookie(),
 		Expires:  expires,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }
 

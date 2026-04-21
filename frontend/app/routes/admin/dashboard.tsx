@@ -69,7 +69,7 @@ export default function AdminDashboard() {
   const fetchCustomers = (mounted = true) => {
     setCustomerLoading(true);
     fetch(`${API_BASE}/admin/customers`, { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<Customer[]>)
       .then(data => { if (mounted) setCustomers(data || []); })
       .catch(() => { if (mounted) setCustomers([]); })
       .finally(() => { if (mounted) setCustomerLoading(false); });
@@ -78,7 +78,7 @@ export default function AdminDashboard() {
   const fetchEmailLogs = (mounted = true) => {
     setEmailLogLoading(true);
     fetch(`${API_BASE}/admin/email-logs`, { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<EmailLog[]>)
       .then(data => { if (mounted) setEmailLogs(data || []); })
       .catch(() => { if (mounted) setEmailLogs([]); })
       .finally(() => { if (mounted) setEmailLogLoading(false); });
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
   const fetchProviders = (mounted = true) => {
     setProviderLoading(true);
     fetch(`${API_BASE}/providers`, { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<Provider[]>)
       .then(data => { if (mounted) setProviders(data || []); })
       .catch(() => { if (mounted) setProviders([]); })
       .finally(() => { if (mounted) setProviderLoading(false); });

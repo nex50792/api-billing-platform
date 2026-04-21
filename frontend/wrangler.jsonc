@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "api-billing-platform",
+  "compatibility_date": "2026-04-01",
+  "main": "./workers/app.ts",
+  "assets": {
+    "directory": "./build/client",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

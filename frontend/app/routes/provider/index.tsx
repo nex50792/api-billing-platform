@@ -63,7 +63,7 @@ export default function ProviderDashboard() {
   const handleToggleUsage = () => {
     if (!showUsage && usageData.length === 0) {
       fetch(`${API_BASE}/provider/usage`, { credentials: 'include' })
-        .then(r => r.json())
+        .then(r => r.json() as Promise<UsageRow[]>)
         .then(data => setUsageData(data ?? []))
         .catch(() => setUsageData([]));
     }

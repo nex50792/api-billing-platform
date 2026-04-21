@@ -53,26 +53,6 @@ export default function AdminDashboard() {
   const [pwOpen, setPwOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    fetch(`${API_BASE}/admin/me`, { credentials: 'include' })
-      .then(res => {
-        if (!mounted) return;
-        if (!res.ok) {
-          navigate('/admin/login');
-          return;
-        }
-        setAuthChecked(true);
-        fetchProviders(mounted);
-        fetchCustomers(mounted);
-        fetchEmailLogs(mounted);
-      })
-      .catch(() => { if (mounted) navigate('/admin/login'); });
-    return () => { mounted = false; };
-  }, [navigate]);
-
-  if (!authChecked) return null;
-
   const fetchCustomers = (mounted = true) => {
     setCustomerLoading(true);
     fetch(`${API_BASE}/admin/customers`, { credentials: 'include' })
@@ -99,6 +79,26 @@ export default function AdminDashboard() {
       .catch(() => { if (mounted) setProviders([]); })
       .finally(() => { if (mounted) setProviderLoading(false); });
   };
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${API_BASE}/admin/me`, { credentials: 'include' })
+      .then(res => {
+        if (!mounted) return;
+        if (!res.ok) {
+          navigate('/admin/login');
+          return;
+        }
+        setAuthChecked(true);
+        fetchProviders(mounted);
+        fetchCustomers(mounted);
+        fetchEmailLogs(mounted);
+      })
+      .catch(() => { if (mounted) navigate('/admin/login'); });
+    return () => { mounted = false; };
+  }, [navigate]);
+
+  if (!authChecked) return null;
 
   const handleRegisterProvider = async () => {
     setProviderError('');

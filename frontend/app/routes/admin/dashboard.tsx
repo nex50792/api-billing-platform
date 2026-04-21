@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react';
-import { redirect, useNavigate } from 'react-router';
-import type { Route } from './+types/dashboard';
+import { useNavigate } from 'react-router';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get('Cookie') ?? '';
-  const res = await fetch(`${API_BASE}/admin/me`, { headers: { Cookie: cookie } });
-  if (!res.ok) {
-    throw redirect('/admin/login');
-  }
-  return null;
-}
 
 interface Provider {
   id: string;
@@ -61,14 +51,27 @@ export default function AdminDashboard() {
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    fetchProviders(mounted);
-    fetchCustomers(mounted);
-    fetchEmailLogs(mounted);
+    fetch(`${API_BASE}/admin/me`, { credentials: 'include' })
+      .then(res => {
+        if (!mounted) return;
+        if (!res.ok) {
+          navigate('/admin/login');
+          return;
+        }
+        setAuthChecked(true);
+        fetchProviders(mounted);
+        fetchCustomers(mounted);
+        fetchEmailLogs(mounted);
+      })
+      .catch(() => { if (mounted) navigate('/admin/login'); });
     return () => { mounted = false; };
-  }, []);
+  }, [navigate]);
+
+  if (!authChecked) return null;
 
   const fetchCustomers = (mounted = true) => {
     setCustomerLoading(true);

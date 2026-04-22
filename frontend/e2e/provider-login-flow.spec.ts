@@ -13,10 +13,13 @@ test.describe("/provider/login", () => {
   });
 
   test("rejects invalid credentials with an error message", async ({ page }) => {
-    // backend なしで UI の失敗パスを検証するため、ログイン API を 401 にスタブ。
-    await page.route("**/provider/login", route =>
-      route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"invalid credentials"}' }),
-    );
+    // ページ GET ではなく API の POST だけを 401 に差し替え。
+    await page.route("**/provider/login", route => {
+      if (route.request().method() === "POST") {
+        return route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"invalid credentials"}' });
+      }
+      return route.continue();
+    });
     await page.goto("/provider/login");
     await page.getByLabel("メールアドレス").fill("nobody@example.com");
     await page.getByLabel("パスワード").fill("wrong-password");

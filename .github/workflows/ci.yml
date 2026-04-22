@@ -64,7 +64,9 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -p 5435 -U postgres -d api_billing_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-          psql -h localhost -p 5435 -U postgres -d api_billing_test -f backend/migrations/000001_init.up.sql
+          for f in backend/migrations/*.up.sql; do
+            psql -h localhost -p 5435 -U postgres -d api_billing_test -f "$f"
+          done
           psql -h localhost -p 5435 -U postgres -d api_billing_test -f backend/migrations/test_seed.sql
 
       - name: go test

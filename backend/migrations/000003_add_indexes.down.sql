@@ -1,0 +1,13 @@
+DROP INDEX IF EXISTS idx_customer_sessions_token_hash;
+DROP INDEX IF EXISTS idx_provider_sessions_token_hash;
+DROP INDEX IF EXISTS idx_admin_sessions_token_hash;
+DROP INDEX IF EXISTS idx_customer_sessions_expires_at;
+DROP INDEX IF EXISTS idx_provider_sessions_expires_at;
+DROP INDEX IF EXISTS idx_admin_sessions_expires_at;
+DROP INDEX IF EXISTS idx_api_keys_customer_id;
+DROP INDEX IF EXISTS idx_api_keys_provided_api_id;
+DROP INDEX IF EXISTS idx_provided_apis_provider_id;
+DROP INDEX IF EXISTS idx_stripe_events_processed_at;
+DROP INDEX IF EXISTS idx_customer_password_resets_token_hash;
+DROP INDEX IF EXISTS idx_customer_verification_codes_customer_id;
+DROP INDEX IF EXISTS idx_customers_stripe_customer_id;

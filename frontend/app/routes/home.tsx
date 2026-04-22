@@ -26,6 +26,7 @@ export default function Home() {
   const [success, setSuccess] = useState<string>('');
   const [issuingFor, setIssuingFor] = useState<string | null>(null);
   const [expandedDocAPI, setExpandedDocAPI] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,12 +35,15 @@ export default function Home() {
       .catch(() => {});
     apiClient.me()
       .then(me => {
-        if (!mounted || !me) return;
-        setCurrentUser(me);
-        return apiClient.getCustomerAPIKeys();
+        if (!mounted) return;
+        if (me) {
+          setCurrentUser(me);
+          return apiClient.getCustomerAPIKeys();
+        }
       })
       .then((keys?: APIKey[]) => { if (mounted && keys) setApiKeys(keys); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (mounted) setAuthChecked(true); });
     return () => { mounted = false; };
   }, []);
 
@@ -157,6 +161,8 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  if (!authChecked) return null;
 
   if (!currentUser) {
     return (
@@ -281,6 +287,20 @@ export default function Home() {
           {success}
         </div>
       )}
+      {currentUser.subscription_status === 'canceling' && (
+        <div role="status" className="p-3 bg-amber-900/30 border border-amber-600 rounded mb-2.5 text-amber-200 text-sm">
+          {currentUser.subscription_cancel_at
+            ? `${new Date(currentUser.subscription_cancel_at).toLocaleDateString('ja-JP')} に Free プランへ戻ります。それまで Pro プランの全機能を利用できます。`
+            : '期間終了時に Free プランへ戻ります。それまで Pro プランの全機能を利用できます。'}
+          <button
+            type="button"
+            onClick={handleManageSubscription}
+            className="ml-2 underline text-amber-100 bg-transparent border-none cursor-pointer"
+          >
+            キャンセル取り消し
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_2fr] gap-5">
         <div className="border border-gray-600 p-4 rounded-lg">
@@ -299,7 +319,11 @@ export default function Home() {
                 {isPro ? 'Pro' : 'Free'}
               </span>
               {currentUser.subscription_status === 'canceling' && (
-                <span className="text-xs text-red-400">（期間終了後にキャンセル予定）</span>
+                <span className="text-xs text-amber-400">
+                  {currentUser.subscription_cancel_at
+                    ? `（${new Date(currentUser.subscription_cancel_at).toLocaleDateString('ja-JP')} 解約予定）`
+                    : '（期間終了後に解約予定）'}
+                </span>
               )}
               {currentUser.subscription_status && currentUser.subscription_status !== 'canceling' && currentUser.subscription_status !== 'active' && (
                 <span className="text-xs text-gray-400">({currentUser.subscription_status})</span>

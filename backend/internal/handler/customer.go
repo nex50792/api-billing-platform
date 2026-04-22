@@ -171,6 +171,9 @@ func (h *CustomerHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if me.SubscriptionStatus != nil {
 		resp.SubscriptionStatus = me.SubscriptionStatus
 	}
+	if me.SubscriptionCancelAt != nil {
+		resp.SubscriptionCancelAt = me.SubscriptionCancelAt
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }

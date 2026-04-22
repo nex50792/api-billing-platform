@@ -35,7 +35,7 @@ func setupWebhookTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	db.Exec(`CREATE TABLE stripe_events (event_id TEXT PRIMARY KEY)`)
-	db.Exec(`CREATE TABLE customers (id TEXT PRIMARY KEY, name TEXT, email TEXT, plan TEXT DEFAULT 'free', stripe_customer_id TEXT, subscription_status TEXT, created_at TEXT)`)
+	db.Exec(`CREATE TABLE customers (id TEXT PRIMARY KEY, name TEXT, email TEXT, plan TEXT DEFAULT 'free', stripe_customer_id TEXT, subscription_status TEXT, subscription_cancel_at TEXT, created_at TEXT)`)
 	return db
 }
 

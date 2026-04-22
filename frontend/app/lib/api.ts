@@ -31,7 +31,7 @@ class APIClient {
     });
   }
 
-  async me(): Promise<{ id: string; email: string; plan: string; subscription_status?: string } | null> {
+  async me(): Promise<User | null> {
     return this.request('/customer/me', { method: 'GET' });
   }
 
@@ -133,6 +133,7 @@ export interface User {
   email: string;
   plan: string;
   subscription_status?: string;
+  subscription_cancel_at?: string;
 }
 
 export interface ProvidedAPI {

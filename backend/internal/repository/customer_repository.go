@@ -80,24 +80,29 @@ func (r *CustomerRepository) GetPasswordHash(ctx context.Context, id string) (st
 }
 
 type MeProfile struct {
-	Name               string
-	Email              string
-	Plan               string
-	SubscriptionStatus *string
+	Name                 string
+	Email                string
+	Plan                 string
+	SubscriptionStatus   *string
+	SubscriptionCancelAt *time.Time
 }
 
 func (r *CustomerRepository) GetMe(ctx context.Context, id string) (*MeProfile, error) {
 	var p MeProfile
 	var subStatus sql.NullString
+	var cancelAt sql.NullTime
 	err := r.DB.QueryRowContext(ctx,
-		`SELECT name, email, plan, subscription_status FROM customers WHERE id = $1 AND is_active = true`,
+		`SELECT name, email, plan, subscription_status, subscription_cancel_at FROM customers WHERE id = $1 AND is_active = true`,
 		id,
-	).Scan(&p.Name, &p.Email, &p.Plan, &subStatus)
+	).Scan(&p.Name, &p.Email, &p.Plan, &subStatus, &cancelAt)
 	if err != nil {
 		return nil, err
 	}
 	if subStatus.Valid {
 		p.SubscriptionStatus = &subStatus.String
+	}
+	if cancelAt.Valid {
+		p.SubscriptionCancelAt = &cancelAt.Time
 	}
 	return &p, nil
 }
@@ -366,10 +371,11 @@ func (r *CustomerRepository) UpgradeToPro(ctx context.Context, customerID, strip
 	return n, nil
 }
 
-func (r *CustomerRepository) SetSubscriptionStatus(ctx context.Context, stripeCustomerID, status string) error {
+// cancelAt は nil なら NULL に戻す。subscription が再アクティブ化された場合など。
+func (r *CustomerRepository) SetSubscriptionStatus(ctx context.Context, stripeCustomerID, status string, cancelAt *time.Time) error {
 	_, err := r.DB.ExecContext(ctx,
-		`UPDATE customers SET subscription_status = $1 WHERE stripe_customer_id = $2`,
-		status, stripeCustomerID,
+		`UPDATE customers SET subscription_status = $1, subscription_cancel_at = $2 WHERE stripe_customer_id = $3`,
+		status, cancelAt, stripeCustomerID,
 	)
 	if err != nil {
 		return fmt.Errorf("repository.SetSubscriptionStatus: %w", err)
@@ -380,7 +386,7 @@ func (r *CustomerRepository) SetSubscriptionStatus(ctx context.Context, stripeCu
 // customer.subscription.deleted を受けて呼ばれる。plan=free, status=canceled に戻す。
 func (r *CustomerRepository) Downgrade(ctx context.Context, stripeCustomerID string) error {
 	_, err := r.DB.ExecContext(ctx,
-		`UPDATE customers SET plan = 'free', subscription_status = 'canceled' WHERE stripe_customer_id = $1`,
+		`UPDATE customers SET plan = 'free', subscription_status = 'canceled', subscription_cancel_at = NULL WHERE stripe_customer_id = $1`,
 		stripeCustomerID,
 	)
 	if err != nil {

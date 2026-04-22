@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"api-billing-platform/internal/repository"
 
@@ -100,15 +101,27 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			Customer          string `json:"customer"`
 			Status            string `json:"status"`
 			CancelAtPeriodEnd bool   `json:"cancel_at_period_end"`
+			CancelAt          *int64 `json:"cancel_at"`
+			CurrentPeriodEnd  int64  `json:"current_period_end"`
 		}
 		if err := json.Unmarshal(event.Data.Raw, &sub); err == nil {
 			status := sub.Status
+			var cancelAt *time.Time
 			if sub.CancelAtPeriodEnd {
 				status = "canceling"
+				// cancel_at が無ければ current_period_end を使う
+				ts := sub.CurrentPeriodEnd
+				if sub.CancelAt != nil {
+					ts = *sub.CancelAt
+				}
+				if ts > 0 {
+					t := time.Unix(ts, 0).UTC()
+					cancelAt = &t
+				}
 			}
 			slog.Info("stripe subscription event", "customer", sub.Customer, "status", status, "cancel_at_period_end", sub.CancelAtPeriodEnd)
 			if sub.Customer != "" && status != "" {
-				if err := h.customerRepo.SetSubscriptionStatus(r.Context(), sub.Customer, status); err != nil {
+				if err := h.customerRepo.SetSubscriptionStatus(r.Context(), sub.Customer, status, cancelAt); err != nil {
 					slog.Error("failed to update subscription status", "error", err)
 				}
 			}
@@ -134,7 +147,7 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.Unmarshal(event.Data.Raw, &inv); err == nil {
 			if inv.Customer != "" {
-				if err := h.customerRepo.SetSubscriptionStatus(r.Context(), inv.Customer, "past_due"); err != nil {
+				if err := h.customerRepo.SetSubscriptionStatus(r.Context(), inv.Customer, "past_due", nil); err != nil {
 					slog.Error("failed to update subscription status", "error", err)
 				}
 			}

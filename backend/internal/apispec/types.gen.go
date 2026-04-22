@@ -147,11 +147,12 @@ type CredentialsRequest struct {
 
 // CustomerMe defines model for CustomerMe.
 type CustomerMe struct {
-	Email              openapi_types.Email `json:"email"`
-	Id                 openapi_types.UUID  `json:"id"`
-	Name               string              `json:"name"`
-	Plan               CustomerMePlan      `json:"plan"`
-	SubscriptionStatus *string             `json:"subscription_status,omitempty"`
+	Email                openapi_types.Email `json:"email"`
+	Id                   openapi_types.UUID  `json:"id"`
+	Name                 string              `json:"name"`
+	Plan                 CustomerMePlan      `json:"plan"`
+	SubscriptionCancelAt *time.Time          `json:"subscription_cancel_at,omitempty"`
+	SubscriptionStatus   *string             `json:"subscription_status,omitempty"`
 }
 
 // CustomerMePlan defines model for CustomerMe.Plan.

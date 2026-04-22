@@ -195,6 +195,10 @@ components:
         subscription_status:
           type: string
           nullable: true
+        subscription_cancel_at:
+          type: string
+          format: date-time
+          nullable: true
       required: [id, name, email, plan]
 
     ProviderMe:

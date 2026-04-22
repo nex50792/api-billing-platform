@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useLoaderData } from 'react-router';
 import type { Route } from './+types/home';
-import { API_BASE_URL, apiClient, type APIKey, type BillingCheckResponse, type ProvidedAPI, type User } from '../lib/api';
+import { apiClient, type APIKey, type BillingCheckResponse, type ProvidedAPI, type User } from '../lib/api';
 
 export function meta(_args: Route.MetaArgs) {
   return [
@@ -10,33 +9,13 @@ export function meta(_args: Route.MetaArgs) {
   ];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get('Cookie') ?? '';
-  const fetchJSON = async <T,>(path: string): Promise<T | null> => {
-    const res = await fetch(`${API_BASE_URL}${path}`, { headers: { Cookie: cookie } });
-    if (!res.ok) return null;
-    return res.json() as Promise<T>;
-  };
-  const [me, providedAPIs, apiKeys] = await Promise.all([
-    fetchJSON<User>('/customer/me'),
-    fetchJSON<ProvidedAPI[]>('/provided-apis'),
-    fetchJSON<APIKey[]>('/customer/apikeys'),
-  ]);
-  return {
-    me,
-    providedAPIs: providedAPIs ?? [],
-    apiKeys: apiKeys ?? [],
-  };
-}
-
 const loginCardClass = 'max-w-sm mx-auto my-10 p-6 bg-white rounded-lg shadow text-gray-900';
 const lightInputClass = 'w-full p-2 text-base border border-gray-300 rounded';
 
 export default function Home() {
-  const initial = useLoaderData<typeof loader>();
-  const [currentUser, setCurrentUser] = useState<User | null>(initial.me);
-  const [apiKeys, setApiKeys] = useState<APIKey[]>(initial.apiKeys);
-  const [providedAPIs, setProvidedAPIs] = useState<ProvidedAPI[]>(initial.providedAPIs);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  const [providedAPIs, setProvidedAPIs] = useState<ProvidedAPI[]>([]);
   // plainKeys: セッション内で生成したキーの平文 (id -> plain_key)。Billing確認用のみ。
   const [plainKeys, setPlainKeys] = useState<Record<string, string>>({});
   const [issuedKeyModal, setIssuedKeyModal] = useState<{ plainKey: string; apiName: string } | null>(null);
@@ -47,6 +26,22 @@ export default function Home() {
   const [success, setSuccess] = useState<string>('');
   const [issuingFor, setIssuingFor] = useState<string | null>(null);
   const [expandedDocAPI, setExpandedDocAPI] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    apiClient.getProvidedAPIs()
+      .then((apis: ProvidedAPI[]) => { if (mounted) setProvidedAPIs(apis); })
+      .catch(() => {});
+    apiClient.me()
+      .then(me => {
+        if (!mounted || !me) return;
+        setCurrentUser(me);
+        return apiClient.getCustomerAPIKeys();
+      })
+      .then((keys?: APIKey[]) => { if (mounted && keys) setApiKeys(keys); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

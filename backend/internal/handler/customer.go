@@ -1,18 +1,19 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/big"
 	"net/http"
 	"strings"
 	"time"
 
 	"api-billing-platform/internal/apispec"
+	"api-billing-platform/internal/middleware"
 	"api-billing-platform/internal/repository"
 
 	"github.com/google/uuid"
@@ -105,7 +106,7 @@ func (h *CustomerHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
-		slog.Error("customer login db error", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("customer login db error", "error", err)
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
@@ -126,7 +127,7 @@ func (h *CustomerHandler) Login(w http.ResponseWriter, r *http.Request) {
 	tokenHash := hashSessionToken(plainToken)
 	expiresAt := time.Now().Add(24 * time.Hour)
 	if err := h.repo.CreateSession(r.Context(), id, tokenHash, expiresAt); err != nil {
-		slog.Error("customer login failed to create session", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("customer login failed to create session", "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
@@ -139,7 +140,7 @@ func (h *CustomerHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("customer_session_token"); err == nil {
 		tokenHash := hashSessionToken(c.Value)
 		if err := h.repo.DeleteSessionByTokenHash(r.Context(), tokenHash); err != nil {
-			slog.Error("customer logout failed to delete session", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("customer logout failed to delete session", "error", err)
 		}
 	}
 	clearSessionCookie(w, "customer_session_token")
@@ -158,7 +159,7 @@ func (h *CustomerHandler) Me(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		slog.Error("customer me db error", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("customer me db error", "error", err)
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
@@ -231,13 +232,13 @@ func (h *CustomerHandler) Signup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.repo.InvalidateUnusedVerificationCodes(r.Context(), existing.ID); err != nil {
-			slog.Error("customer signup failed to invalidate old codes", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("customer signup failed to invalidate old codes", "error", err)
 		}
 		if err := h.repo.CreateVerificationCode(r.Context(), existing.ID, code, expires); err != nil {
 			http.Error(w, "failed to save verification code", http.StatusInternalServerError)
 			return
 		}
-		h.sendVerificationCode(email, code)
+		h.sendVerificationCode(r.Context(), email, code)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{"message": "signup ok (reissued)", "verification": "sent"})
@@ -253,29 +254,31 @@ func (h *CustomerHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to save verification code", http.StatusInternalServerError)
 		return
 	}
-	h.sendVerificationCode(email, code)
+	h.sendVerificationCode(r.Context(), email, code)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "signup ok", "verification": "sent"})
 }
 
-func (h *CustomerHandler) sendVerificationCode(email, code string) {
+func (h *CustomerHandler) sendVerificationCode(ctx context.Context, email, code string) {
+	logger := middleware.LoggerFromContext(ctx)
 	if h.Mailer != nil {
 		if err := h.Mailer.SendVerificationCodeEmail(email, code); err != nil {
-			slog.Error("customer signup mail send failed", "email", email, "error", err)
+			logger.Error("customer signup mail send failed", "email", email, "error", err)
 		}
 	} else {
-		slog.Info("customer signup verification code", "email", email, "code", code)
+		logger.Info("customer signup verification code", "email", email, "code", code)
 	}
 }
 
-func (h *CustomerHandler) sendPasswordResetEmail(email, link string) {
+func (h *CustomerHandler) sendPasswordResetEmail(ctx context.Context, email, link string) {
+	logger := middleware.LoggerFromContext(ctx)
 	if h.Mailer != nil {
 		if err := h.Mailer.SendPasswordResetEmail(email, link); err != nil {
-			slog.Error("customer forgot password mail send failed", "email", email, "error", err)
+			logger.Error("customer forgot password mail send failed", "email", email, "error", err)
 		}
 	} else {
-		slog.Info("customer forgot password reset link", "email", email, "link", link)
+		logger.Info("customer forgot password reset link", "email", email, "link", link)
 	}
 }
 
@@ -323,7 +326,7 @@ func (h *CustomerHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	if c, err := r.Cookie("customer_session_token"); err == nil {
 		currentHash := hashSessionToken(c.Value)
 		if err := h.repo.DeleteOtherSessions(r.Context(), customerID, currentHash); err != nil {
-			slog.Error("customer change password failed to invalidate other sessions", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("customer change password failed to invalidate other sessions", "error", err)
 		}
 	}
 
@@ -369,7 +372,7 @@ func (h *CustomerHandler) ForgotPassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	link := frontendURL() + "/reset-password?token=" + plainToken
-	h.sendPasswordResetEmail(email, link)
+	h.sendPasswordResetEmail(r.Context(), email, link)
 	json.NewEncoder(w).Encode(map[string]string{"message": "リセットリンクをメールで送信しました（登録済みの場合）"})
 }
 
@@ -418,7 +421,7 @@ func (h *CustomerHandler) ResetPassword(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.repo.DeleteAllSessions(r.Context(), reset.CustomerID); err != nil {
-		slog.Error("customer reset password failed to invalidate sessions", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("customer reset password failed to invalidate sessions", "error", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

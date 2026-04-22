@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"api-billing-platform/internal/apispec"
+	"api-billing-platform/internal/middleware"
 	"api-billing-platform/internal/repository"
 
 	"github.com/stripe/stripe-go/v85"
@@ -77,13 +77,13 @@ func (h *StripeCheckoutHandler) CreateCheckoutSession(w http.ResponseWriter, r *
 		params.AddMetadata("customer_id", customerID)
 		c, err := customer.New(params)
 		if err != nil {
-			slog.Error("stripe checkout failed to create customer", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("stripe checkout failed to create customer", "error", err)
 			http.Error(w, "failed to create stripe customer", http.StatusInternalServerError)
 			return
 		}
 		stripeCustomer = c.ID
 		if err := h.repo.SetStripeCustomerID(r.Context(), customerID, stripeCustomer); err != nil {
-			slog.Error("stripe checkout failed to save customer id", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("stripe checkout failed to save customer id", "error", err)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (h *StripeCheckoutHandler) CreateCheckoutSession(w http.ResponseWriter, r *
 
 	sess, err := checkoutsession.New(checkoutParams)
 	if err != nil {
-		slog.Error("stripe checkout failed to create session", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("stripe checkout failed to create session", "error", err)
 		http.Error(w, "failed to create checkout session", http.StatusInternalServerError)
 		return
 	}
@@ -173,7 +173,7 @@ func (h *StripeCheckoutHandler) CreateBillingPortalSession(w http.ResponseWriter
 	}
 	sess, err := billingportalsession.New(params)
 	if err != nil {
-		slog.Error("billing portal failed to create session", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("billing portal failed to create session", "error", err)
 		http.Error(w, "failed to create billing portal session", http.StatusInternalServerError)
 		return
 	}

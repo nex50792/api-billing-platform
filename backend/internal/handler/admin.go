@@ -2,11 +2,11 @@ package handler
 
 import (
 	"api-billing-platform/internal/apispec"
+	"api-billing-platform/internal/middleware"
 	"api-billing-platform/internal/repository"
 	"api-billing-platform/internal/service"
 	"database/sql"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -156,7 +156,7 @@ func (h *AdminHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	currentHash := hashSessionToken(c.Value)
 	if err := h.repo.DeleteOtherSessions(r.Context(), admin.ID, currentHash); err != nil {
-		slog.Error("admin change password failed to invalidate other sessions", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("admin change password failed to invalidate other sessions", "error", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"api-billing-platform/internal/apispec"
+	"api-billing-platform/internal/middleware"
 	"api-billing-platform/internal/repository"
 
 	"github.com/go-chi/chi/v5"
@@ -104,7 +104,7 @@ func (h *ProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Request)
 		link := frontendURL() + "/provider/set-password?token=" + plainToken
 		if h.Mailer != nil {
 			if err := h.Mailer.SendPasswordSetupEmail(email, link); err != nil {
-				slog.Error("create provider failed to send re-invite email", "email", email, "error", err)
+				middleware.LoggerFromContext(r.Context()).Error("create provider failed to send re-invite email", "email", email, "error", err)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -126,7 +126,7 @@ func (h *ProviderHandler) CreateProvider(w http.ResponseWriter, r *http.Request)
 	link := frontendURL() + "/provider/set-password?token=" + plainToken
 	if h.Mailer != nil {
 		if err := h.Mailer.SendPasswordSetupEmail(email, link); err != nil {
-			slog.Error("create provider failed to send setup email", "email", email, "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("create provider failed to send setup email", "email", email, "error", err)
 		}
 	}
 	pid, _ := uuid.Parse(id)
@@ -179,7 +179,7 @@ func (h *ProviderHandler) ForgotPassword(w http.ResponseWriter, r *http.Request)
 	link := frontendURL() + "/provider/set-password?token=" + plainToken
 	if h.Mailer != nil {
 		if err := h.Mailer.SendPasswordResetEmail(email, link); err != nil {
-			slog.Error("provider forgot password failed to send reset email", "email", email, "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("provider forgot password failed to send reset email", "email", email, "error", err)
 		}
 	}
 	json.NewEncoder(w).Encode(map[string]string{"message": "リセットリンクをメールで送信しました（登録済みの場合）"})
@@ -245,7 +245,7 @@ func (h *ProviderHandler) SetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.DeleteAllSessions(r.Context(), providerID); err != nil {
-		slog.Error("provider set password failed to invalidate sessions", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("provider set password failed to invalidate sessions", "error", err)
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -266,7 +266,7 @@ func (h *ProviderHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
-		slog.Error("provider login db error", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("provider login db error", "error", err)
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
@@ -287,7 +287,7 @@ func (h *ProviderHandler) Login(w http.ResponseWriter, r *http.Request) {
 	tokenHash := hashSessionToken(plainToken)
 	expiresAt := time.Now().Add(24 * time.Hour)
 	if err := h.repo.CreateSession(r.Context(), id, tokenHash, expiresAt); err != nil {
-		slog.Error("provider login failed to create session", "error", err)
+		middleware.LoggerFromContext(r.Context()).Error("provider login failed to create session", "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
@@ -300,7 +300,7 @@ func (h *ProviderHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("provider_session_token"); err == nil {
 		tokenHash := hashSessionToken(c.Value)
 		if err := h.repo.DeleteSessionByTokenHash(r.Context(), tokenHash); err != nil {
-			slog.Error("provider logout failed to delete session", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("provider logout failed to delete session", "error", err)
 		}
 	}
 	clearSessionCookie(w, "provider_session_token")
@@ -370,7 +370,7 @@ func (h *ProviderHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	if c, err := r.Cookie("provider_session_token"); err == nil {
 		currentHash := hashSessionToken(c.Value)
 		if err := h.repo.DeleteOtherSessions(r.Context(), providerID, currentHash); err != nil {
-			slog.Error("provider change password failed to invalidate other sessions", "error", err)
+			middleware.LoggerFromContext(r.Context()).Error("provider change password failed to invalidate other sessions", "error", err)
 		}
 	}
 

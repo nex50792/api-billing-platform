@@ -136,7 +136,7 @@ jobs:
             --max-examples 10
 
   frontend:
-    name: Frontend · lint + typecheck + build
+    name: Frontend · lint + typecheck + test + build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -156,4 +156,44 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm run test
+
       - run: npm run build
+
+  e2e:
+    name: E2E · playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: npm run dev &
+        env:
+          VITE_API_URL: http://localhost:8080
+
+      - name: Wait for dev server
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:5173 > /dev/null; then
+              echo "Dev server up"
+              break
+            fi
+            sleep 1
+          done
+
+      - run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:5173

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -35,8 +37,12 @@ func testDB() *sql.DB {
 
 func applyTestSchema(db *sql.DB, migrationDir string) {
 	db.Exec(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`)
-	if data, err := os.ReadFile(migrationDir + "/000001_init.up.sql"); err == nil {
-		db.Exec(string(data))
+	files, _ := filepath.Glob(migrationDir + "/*.up.sql")
+	sort.Strings(files)
+	for _, f := range files {
+		if data, err := os.ReadFile(f); err == nil {
+			db.Exec(string(data))
+		}
 	}
 	if data, err := os.ReadFile(migrationDir + "/test_seed.sql"); err == nil {
 		db.Exec(string(data))

@@ -158,6 +158,7 @@ func (h *CustomerHandler) Me(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
+		slog.Error("customer me db error", "error", err)
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}

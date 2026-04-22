@@ -26,6 +26,8 @@ export default function ProviderLogin() {
       } else {
         setError('ログインに失敗しました');
       }
+    } catch {
+      setError('通信エラーが発生しました');
     } finally {
       setLoading(false);
     }

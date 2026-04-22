@@ -46,8 +46,13 @@ func (s *APIKeyService) DeleteAPIKey(ctx context.Context, id, customerID string)
 	return s.repo.Delete(ctx, id, customerID)
 }
 
+func (s *APIKeyService) ListCustomerKeys(ctx context.Context, customerID string) ([]*model.APIKey, error) {
+	return s.repo.ListByCustomer(ctx, customerID)
+}
+
 type APIKeyServiceInterface interface {
 	IssueAPIKey(ctx context.Context, customerID string, providedAPIID *string) (plainKey string, apiKey *model.APIKey, err error)
 	VerifyAPIKey(ctx context.Context, plainKey, providedAPIID, providerID string) (*repository.VerifyResult, error)
 	DeleteAPIKey(ctx context.Context, id, customerID string) error
+	ListCustomerKeys(ctx context.Context, customerID string) ([]*model.APIKey, error)
 }

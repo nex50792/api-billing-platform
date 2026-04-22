@@ -40,6 +40,9 @@ func (m *billingMockRepo) GetCustomerByAPIKey(ctx context.Context, apiKeyID stri
 func (m *billingMockRepo) VerifyForProvider(_ context.Context, _, _, _ string) (*repository.VerifyResult, error) {
 	return nil, nil
 }
+func (m *billingMockRepo) ListByCustomer(_ context.Context, _ string) ([]*model.APIKey, error) {
+	return nil, nil
+}
 
 func setupBillingTestDB(t *testing.T) *sql.DB {
 	t.Helper()

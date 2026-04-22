@@ -26,9 +26,10 @@ func withChiID(r *http.Request, id string) *http.Request {
 }
 
 type mockAPIKeyService struct {
-	issueAPIKeyFunc  func(ctx context.Context, customerID string, providedAPIID *string) (string, *model.APIKey, error)
-	verifyAPIKeyFunc func(ctx context.Context, plainKey, providedAPIID, providerID string) (*repository.VerifyResult, error)
-	deleteAPIKeyFunc func(ctx context.Context, id, customerID string) error
+	issueAPIKeyFunc      func(ctx context.Context, customerID string, providedAPIID *string) (string, *model.APIKey, error)
+	verifyAPIKeyFunc     func(ctx context.Context, plainKey, providedAPIID, providerID string) (*repository.VerifyResult, error)
+	deleteAPIKeyFunc     func(ctx context.Context, id, customerID string) error
+	listCustomerKeysFunc func(ctx context.Context, customerID string) ([]*model.APIKey, error)
 }
 
 func (m *mockAPIKeyService) IssueAPIKey(ctx context.Context, customerID string, providedAPIID *string) (string, *model.APIKey, error) {
@@ -50,6 +51,13 @@ func (m *mockAPIKeyService) DeleteAPIKey(ctx context.Context, id, customerID str
 		return m.deleteAPIKeyFunc(ctx, id, customerID)
 	}
 	return nil
+}
+
+func (m *mockAPIKeyService) ListCustomerKeys(ctx context.Context, customerID string) ([]*model.APIKey, error) {
+	if m.listCustomerKeysFunc != nil {
+		return m.listCustomerKeysFunc(ctx, customerID)
+	}
+	return nil, nil
 }
 
 func TestAPIKeyHandler_IssueAPIKey_InvalidJSON(t *testing.T) {
@@ -119,17 +127,19 @@ func setupCustomerAPIKeysTestDB(t *testing.T) *sql.DB {
 }
 
 func TestGetCustomerAPIKeys_ReturnsOwnedKeys(t *testing.T) {
-	db := setupCustomerAPIKeysTestDB(t)
 	const (
 		custA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-		custB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 		key1  = "11111111-1111-1111-1111-111111111111"
-		key2  = "22222222-2222-2222-2222-222222222222"
 	)
-	db.Exec(`INSERT INTO customers (id, name, email) VALUES (?, 'Customer A', 'a@example.com'), (?, 'Customer B', 'b@example.com')`, custA, custB)
-	db.Exec(`INSERT INTO api_keys (id, customer_id, key_hash, usage_count, usage_reset_at, created_at) VALUES (?, ?, 'hash1', 5, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'), (?, ?, 'hash2', 0, '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')`, key1, custA, key2, custB)
-
-	h := handler.NewAPIKeyHandler(nil, db)
+	mock := &mockAPIKeyService{
+		listCustomerKeysFunc: func(_ context.Context, cid string) ([]*model.APIKey, error) {
+			if cid != custA {
+				t.Fatalf("expected customer %s, got %s", custA, cid)
+			}
+			return []*model.APIKey{{ID: key1, CustomerID: custA, UsageCount: 5}}, nil
+		},
+	}
+	h := handler.NewAPIKeyHandler(mock, nil)
 	req := httptest.NewRequest(http.MethodGet, "/customer/apikeys", nil)
 	ctx := context.WithValue(req.Context(), middleware.ContextKeyCustomerID, custA)
 	req = req.WithContext(ctx)
@@ -361,10 +371,12 @@ func TestGetCustomerAPIKeys_NoCustomerID_Returns401(t *testing.T) {
 }
 
 func TestGetCustomerAPIKeys_Empty(t *testing.T) {
-	db := setupCustomerAPIKeysTestDB(t)
-	db.Exec(`INSERT INTO customers (id, name, email) VALUES ('cust-empty', 'Empty Customer', 'empty@example.com')`)
-
-	h := handler.NewAPIKeyHandler(nil, db)
+	mock := &mockAPIKeyService{
+		listCustomerKeysFunc: func(_ context.Context, _ string) ([]*model.APIKey, error) {
+			return []*model.APIKey{}, nil
+		},
+	}
+	h := handler.NewAPIKeyHandler(mock, nil)
 	req := httptest.NewRequest(http.MethodGet, "/customer/apikeys", nil)
 	ctx := context.WithValue(req.Context(), middleware.ContextKeyCustomerID, "cust-empty")
 	req = req.WithContext(ctx)

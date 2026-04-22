@@ -250,10 +250,34 @@ func (r *APIKeyRepository) VerifyForProvider(ctx context.Context, plainKey, prov
 	return &res, nil
 }
 
+func (r *APIKeyRepository) ListByCustomer(ctx context.Context, customerID string) ([]*model.APIKey, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, customer_id, provided_api_id, usage_count, usage_reset_at, created_at
+		 FROM api_keys WHERE customer_id = $1 ORDER BY created_at DESC`, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	keys := []*model.APIKey{}
+	for rows.Next() {
+		var k model.APIKey
+		var pid sql.NullString
+		if err := rows.Scan(&k.ID, &k.CustomerID, &pid, &k.UsageCount, &k.UsageResetAt, &k.CreatedAt); err != nil {
+			continue
+		}
+		if pid.Valid {
+			k.ProvidedAPIID = &pid.String
+		}
+		keys = append(keys, &k)
+	}
+	return keys, nil
+}
+
 type APIKeyRepositoryInterface interface {
 	Create(ctx context.Context, customerID, plainKey string, providedAPIID *string) (*model.APIKey, error)
 	GetByID(ctx context.Context, id string) (*model.APIKey, error)
 	GetByPlainKey(ctx context.Context, plainKey string) (*model.APIKey, error)
+	ListByCustomer(ctx context.Context, customerID string) ([]*model.APIKey, error)
 	Delete(ctx context.Context, id, customerID string) error
 	IncrementUsage(ctx context.Context, id string) error
 	ResetUsage(ctx context.Context, id string, resetAt time.Time) error

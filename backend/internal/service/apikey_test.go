@@ -79,6 +79,10 @@ func (m *mockAPIKeyRepository) Delete(ctx context.Context, id, customerID string
 	return nil
 }
 
+func (m *mockAPIKeyRepository) ListByCustomer(_ context.Context, _ string) ([]*model.APIKey, error) {
+	return nil, nil
+}
+
 func TestAPIKeyService_IssueAPIKey_GeneratesValidKey(t *testing.T) {
 	svc := service.NewAPIKeyService(&mockAPIKeyRepository{})
 	ctx := context.Background()

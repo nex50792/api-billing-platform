@@ -80,41 +80,28 @@ func (h *APIKeyHandler) GetCustomerAPIKeys(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT ak.id, ak.customer_id, ak.usage_count, ak.usage_reset_at, ak.created_at, ak.provided_api_id
-		 FROM api_keys ak
-		 WHERE ak.customer_id = $1 ORDER BY ak.created_at DESC`,
-		customerID,
-	)
+	keys, err := h.service.ListCustomerKeys(r.Context(), customerID)
 	if err != nil {
 		http.Error(w, "failed to fetch api keys", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-	result := []apispec.APIKey{}
-	for rows.Next() {
-		var id, custID string
-		var usageCount int
-		var usageResetAt, createdAt scanTime
-		var pid sql.NullString
-		if err := rows.Scan(&id, &custID, &usageCount, &usageResetAt, &createdAt, &pid); err != nil {
-			continue
-		}
-		keyID, _ := uuid.Parse(id)
-		custUUID, _ := uuid.Parse(custID)
-		k := apispec.APIKey{
+	result := make([]apispec.APIKey, 0, len(keys))
+	for _, k := range keys {
+		keyID, _ := uuid.Parse(k.ID)
+		custUUID, _ := uuid.Parse(k.CustomerID)
+		item := apispec.APIKey{
 			Id:           keyID,
 			CustomerId:   custUUID,
-			UsageCount:   usageCount,
-			UsageResetAt: usageResetAt.Time,
-			CreatedAt:    createdAt.Time,
+			UsageCount:   k.UsageCount,
+			UsageResetAt: k.UsageResetAt,
+			CreatedAt:    k.CreatedAt,
 		}
-		if pid.Valid {
-			if p, err := uuid.Parse(pid.String); err == nil {
-				k.ProvidedApiId = &p
+		if k.ProvidedAPIID != nil {
+			if p, err := uuid.Parse(*k.ProvidedAPIID); err == nil {
+				item.ProvidedApiId = &p
 			}
 		}
-		result = append(result, k)
+		result = append(result, item)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)

@@ -238,7 +238,7 @@ export default function Home() {
   const usageBarClass = usagePct >= 90 ? 'bg-red-500' : usagePct >= 70 ? 'bg-amber-500' : 'bg-green-500';
 
   return (
-    <div className="max-w-[1200px] mx-auto p-5">
+    <div className="max-w-[1200px] mx-auto p-3 sm:p-5">
       {issuedKeyModal && (
         <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-[1000]">
           <div className="bg-slate-800 rounded-lg p-7 max-w-[520px] w-[90%] border border-slate-600">
@@ -267,11 +267,11 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="m-0">API Billing Platform Dashboard</h1>
+      <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
+        <h1 className="m-0 text-lg sm:text-2xl">API Billing Platform Dashboard</h1>
         <button
           onClick={handleLogout}
-          className="py-2 px-4 bg-red-600 text-white border-none rounded cursor-pointer"
+          className="py-2 px-4 bg-red-600 text-white border-none rounded cursor-pointer text-sm"
         >
           ログアウト
         </button>
@@ -302,7 +302,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_2fr] gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-5">
         <div className="border border-gray-600 p-4 rounded-lg">
           <h2>アカウント</h2>
           <div className="mb-3">

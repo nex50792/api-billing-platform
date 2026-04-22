@@ -175,12 +175,12 @@ export default function AdminDashboard() {
   const providerErrorId = 'admin-provider-error';
 
   return (
-    <main className="p-6 relative">
+    <main className="p-3 sm:p-6 relative">
       <button
-        className="absolute top-6 right-6 py-2 px-4 bg-red-500 text-white border-none rounded cursor-pointer"
+        className="absolute top-3 right-3 sm:top-6 sm:right-6 py-2 px-4 bg-red-500 text-white border-none rounded cursor-pointer"
         onClick={handleLogout}
       >管理者ログアウト</button>
-      <h1>Admin Dashboard</h1>
+      <h1 className="text-lg sm:text-2xl">Admin Dashboard</h1>
 
       <section className="mb-8 max-w-sm">
         <button
@@ -257,7 +257,7 @@ export default function AdminDashboard() {
 
       <section className="mb-8">
         <h2>Provider 新規登録</h2>
-        <div className="flex gap-2 items-center mb-2">
+        <div className="flex flex-wrap gap-2 items-center mb-2">
           <label htmlFor="admin-provider-name" className="sr-only">Provider名</label>
           <input
             id="admin-provider-name"
@@ -296,7 +296,8 @@ export default function AdminDashboard() {
       <section className="mb-8">
         <h2>Customer 一覧</h2>
         {customerLoading ? <div>Loading…</div> : (
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse">
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
@@ -323,13 +324,15 @@ export default function AdminDashboard() {
               {customers.length === 0 && <tr><td colSpan={5} className="p-3 text-gray-400">Customerが見つかりません</td></tr>}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
       <section className="mb-8">
         <h2>メール送信ログ</h2>
         {emailLogLoading ? <div>Loading…</div> : (
-          <table className="w-full border-collapse text-[13px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-[13px]">
             <thead>
               <tr>
                 <th className={thClass}>宛先</th>
@@ -355,13 +358,15 @@ export default function AdminDashboard() {
               {emailLogs.length === 0 && <tr><td colSpan={4} className="p-3 text-gray-400">送信ログがありません</td></tr>}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
       <section>
         <h2>Provider 一覧</h2>
         {providerLoading ? <div>Loading…</div> : (
-          <table className="w-full border-collapse">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse">
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
@@ -391,6 +396,7 @@ export default function AdminDashboard() {
               {providers.length === 0 && <tr><td colSpan={4} className="p-3 text-gray-400">Providerが見つかりません</td></tr>}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </main>

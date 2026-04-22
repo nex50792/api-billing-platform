@@ -86,15 +86,15 @@ export default function ProviderDashboard() {
   const totalRequests = apis.reduce((sum, a) => sum + (a.total_usage ?? 0), 0);
 
   return (
-    <main className="max-w-[800px] mx-auto p-6 text-white">
-      <header className="flex justify-between items-center mb-6">
+    <main className="max-w-[800px] mx-auto p-4 sm:p-6 text-white">
+      <header className="flex flex-wrap gap-2 justify-between items-center mb-6">
         <div>
-          <h1 className="m-0 text-[22px] font-bold">プロバイダー管理画面</h1>
+          <h1 className="m-0 text-lg sm:text-[22px] font-bold">プロバイダー管理画面</h1>
           <div className="mt-1 text-gray-300 text-sm">
             {provider.name}（{provider.email}）
           </div>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <a href="/provider/change-password" className="py-2 px-3 text-[13px] text-slate-400 no-underline border border-slate-600 rounded">
             パスワード変更
           </a>
@@ -108,26 +108,27 @@ export default function ProviderDashboard() {
       </header>
 
       {apis.length > 0 && (
-        <div className="flex gap-4 mb-5">
-          <div className="flex-1 bg-slate-800 rounded-lg py-4 px-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          <div className="bg-slate-800 rounded-lg py-4 px-5">
             <div className="text-xs text-slate-400 mb-1">合計APIリクエスト数</div>
             <div className="text-[22px] font-bold">{totalRequests.toLocaleString()}</div>
           </div>
-          <div className="flex-1 bg-slate-800 rounded-lg py-4 px-5">
+          <div className="bg-slate-800 rounded-lg py-4 px-5">
             <div className="text-xs text-slate-400 mb-1">提供APIサービス数</div>
             <div className="text-[22px] font-bold">{apis.length}</div>
           </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="m-0">APIサービス一覧</h2>
+      <div className="flex flex-wrap gap-2 justify-between items-center mb-3">
+        <h2 className="m-0 text-lg sm:text-2xl">APIサービス一覧</h2>
         <a href="/provider/apis/new" className="text-blue-600 font-semibold">+ 新規登録</a>
       </div>
 
       {error && <div role="alert" className="text-red-600 mb-2">{error}</div>}
 
-      <table className="w-full border-collapse">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse">
         <thead>
           <tr>
             <th className={thClass}>API名</th>
@@ -188,10 +189,11 @@ export default function ProviderDashboard() {
           )}
         </tbody>
       </table>
+      </div>
 
       <div className="mt-8">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="m-0">顧客別利用統計</h2>
+        <div className="flex flex-wrap gap-2 justify-between items-center mb-3">
+          <h2 className="m-0 text-lg sm:text-2xl">顧客別利用統計</h2>
           <button
             onClick={handleToggleUsage}
             className="py-1.5 px-3.5 bg-slate-800 text-sky-300 border border-slate-700 rounded cursor-pointer text-[13px]"
@@ -200,7 +202,8 @@ export default function ProviderDashboard() {
           </button>
         </div>
         {showUsage && (
-          <table className="w-full border-collapse text-[13px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-[13px]">
             <thead>
               <tr>
                 <th className={thClass}>APIサービス名</th>
@@ -223,6 +226,7 @@ export default function ProviderDashboard() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </main>

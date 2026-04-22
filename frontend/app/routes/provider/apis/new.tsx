@@ -41,8 +41,8 @@ export default function ProviderAPINew() {
   };
 
   return (
-    <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
-      <h2>新規APIサービス登録</h2>
+    <main className="max-w-[600px] mx-auto my-10 p-4 sm:p-6 text-white">
+      <h2 className="text-lg sm:text-2xl">新規APIサービス登録</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="provider-api-new-name">API名</label>

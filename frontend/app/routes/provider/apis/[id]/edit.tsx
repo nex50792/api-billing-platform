@@ -82,7 +82,7 @@ export default function ProviderAPIEdit() {
 
   if (loadError) {
     return (
-      <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
+      <main className="max-w-[600px] mx-auto my-10 p-4 sm:p-6 text-white">
         <p role="alert" className="text-red-600">{loadError}</p>
       </main>
     );
@@ -90,7 +90,7 @@ export default function ProviderAPIEdit() {
 
   if (!api) {
     return (
-      <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
+      <main className="max-w-[600px] mx-auto my-10 p-4 sm:p-6 text-white">
         <p>読み込み中...</p>
       </main>
     );
@@ -98,7 +98,7 @@ export default function ProviderAPIEdit() {
 
   return (
     <main className="max-w-[600px] mx-auto my-10 p-6 text-white">
-      <h2>APIサービス編集</h2>
+      <h2 className="text-lg sm:text-2xl">APIサービス編集</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label htmlFor="provider-api-edit-name">API名</label>

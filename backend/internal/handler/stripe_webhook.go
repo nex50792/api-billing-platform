@@ -107,11 +107,12 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(event.Data.Raw, &sub); err == nil {
 			status := sub.Status
 			var cancelAt *time.Time
-			if sub.CancelAtPeriodEnd {
+			// cancel_at_period_end=true（旧パターン）または cancel_at に日時が入る（新パターン）の両方を「canceling」扱い。
+			scheduledCancel := sub.CancelAtPeriodEnd || (sub.CancelAt != nil && *sub.CancelAt > 0)
+			if scheduledCancel {
 				status = "canceling"
-				// cancel_at が無ければ current_period_end を使う
 				ts := sub.CurrentPeriodEnd
-				if sub.CancelAt != nil {
+				if sub.CancelAt != nil && *sub.CancelAt > 0 {
 					ts = *sub.CancelAt
 				}
 				if ts > 0 {
@@ -119,7 +120,7 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 					cancelAt = &t
 				}
 			}
-			slog.Info("stripe subscription event", "customer", sub.Customer, "status", status, "cancel_at_period_end", sub.CancelAtPeriodEnd)
+			slog.Info("stripe subscription event", "customer", sub.Customer, "status", status, "cancel_at_period_end", sub.CancelAtPeriodEnd, "cancel_at", sub.CancelAt)
 			if sub.Customer != "" && status != "" {
 				if err := h.customerRepo.SetSubscriptionStatus(r.Context(), sub.Customer, status, cancelAt); err != nil {
 					slog.Error("failed to update subscription status", "error", err)

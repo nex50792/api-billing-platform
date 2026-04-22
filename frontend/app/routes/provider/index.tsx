@@ -79,7 +79,7 @@ export default function ProviderDashboard() {
   };
 
   const handleLogout = async () => {
-    await fetch(`${API_BASE}/provider/logout`, { method: 'POST', credentials: 'include' });
+    await fetch(`${API_BASE}/provider/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' });
     navigate('/provider/login');
   };
 

@@ -112,7 +112,7 @@ func main() {
 	})
 	r.Use(middleware.Timeout(middleware.DefaultRequestTimeout))
 	r.Use(middleware.SecurityHeaders)
-	r.Use(middleware.CSRFProtect(allowedOrigins))
+	// CORS は CSRF より前に置く。CSRF の 403 でも Access-Control-Allow-Origin が乗り、ブラウザが正しいエラー文を表示する。
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -121,6 +121,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	r.Use(middleware.CSRFProtect(allowedOrigins))
 
 	adminRepo := repository.NewAdminRepository(db)
 	adminService := service.NewAdminService(adminRepo)

@@ -59,7 +59,9 @@ export default function ProviderSetPassword() {
   return (
     <main className="max-w-sm mx-auto my-10 p-6 bg-white rounded-lg shadow text-gray-900">
       <h2 className="mb-6 text-gray-900 font-bold">パスワード設定</h2>
-      {valid ? (
+      {success ? (
+        <p role="status" className="font-medium text-green-600">パスワードが設定されました。ログイン画面へ移動します。</p>
+      ) : valid ? (
         <>
           <Form method="post">
             <input type="hidden" name="token" value={token} />
@@ -85,7 +87,6 @@ export default function ProviderSetPassword() {
               {submitting ? '設定中...' : '設定する'}
             </button>
           </Form>
-          {success && <p role="status" className="mt-4 font-medium text-green-600">パスワードが設定されました。ログイン画面へ移動します。</p>}
           {error && <p id={errorId} role="alert" className="mt-4 font-medium text-red-600">{error}</p>}
         </>
       ) : (

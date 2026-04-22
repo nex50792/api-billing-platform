@@ -11,3 +11,9 @@
 # Cloudflare
 /.wrangler/
 /worker-configuration.d.ts
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/.playwright/

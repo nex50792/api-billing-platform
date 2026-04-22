@@ -124,9 +124,8 @@ func (h *StripeCheckoutHandler) CreateCheckoutSession(w http.ResponseWriter, r *
 		CancelURL:         stripe.String(fURL + "/?checkout=cancel"),
 		ClientReferenceID: stripe.String(customerID),
 	}
-	// 同じ顧客が短時間に複数回リクエストしても1つのセッションだけ作成されるよう idempotency key を設定する。
-	// キーは customerID + 日付（UTC日単位）で構成し、1日以内の重複リクエストを吸収する。
-	idempotencyKey := "checkout-" + customerID + "-" + time.Now().UTC().Format("20060102")
+	// 連打による重複セッション作成だけを吸収する。分粒度なので期限切れ session を翌回まで引きずらない。
+	idempotencyKey := "checkout-" + customerID + "-" + time.Now().UTC().Format("200601021504")
 	checkoutParams.SetIdempotencyKey(idempotencyKey)
 
 	sess, err := checkoutsession.New(checkoutParams)

@@ -22,13 +22,13 @@
     "isbot": "^5.1.31",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router": "7.14.1"
+    "react-router": "7.18.4"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.33.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
-    "@react-router/dev": "7.14.1",
+    "@react-router/dev": "7.18.4",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
